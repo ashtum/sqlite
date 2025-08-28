@@ -1,0 +1,932 @@
+#
+# Copyright (c) 2023 Christian Mazakas
+# Copyright (c) 2023 Alan de Freitas
+# Copyright (c) 2021-2023 Sam Darwin
+# Copyright (c) 2020-2021 Peter Dimov
+# Copyright (c) 2021 Andrey Semashev
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+# Official repository: https://github.com/cppalliance/http_io/
+#
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - develop
+      - ci/*
+
+concurrency:
+  group: ${{format('{0}:{1}', github.repository, github.ref)}}
+  cancel-in-progress: true
+
+env:
+  GIT_FETCH_JOBS: 8
+  NET_RETRY_COUNT: 5
+  DEFAULT_BUILD_VARIANT: debug,release
+  UBSAN_OPTIONS: "print_stacktrace=1"
+  ASAN_OPTIONS: "detect_invalid_pointer_pairs=2"
+
+jobs:
+  runner-selection:
+    name: Runner Selection
+    runs-on: ${{ github.repository_owner == 'boostorg' && fromJSON('[ "self-hosted", "linux", "x64", "ubuntu-latest-aws" ]') || 'ubuntu-latest' }}
+    outputs:
+      labelmatrix: ${{ steps.aws_hosted_runners.outputs.labelmatrix }}
+    steps:
+      - name: AWS Hosted Runners
+        id: aws_hosted_runners
+        uses: cppalliance/aws-hosted-runners@v1.0.0
+
+  build:
+    needs: [ runner-selection ]
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows compilers
+          #
+
+          # - compiler: "msvc"
+          #   version: "14.42"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "msvc-14.4"
+          #   generator: "Visual Studio 17 2022"
+          #   is-latest: true
+          #   name: "MSVC 14.42: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "msvc"
+          #   version: "14.34"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "msvc-14.3"
+          #   generator: "Visual Studio 17 2022"
+          #   is-latest: true
+          #   name: "MSVC 14.34: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "msvc"
+          #   version: "14.34"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "msvc-14.3"
+          #   generator: "Visual Studio 17 2022"
+          #   is-latest: true
+          #   name: "MSVC 14.34: C++17-20 (x86)"
+          #   shared: false
+          #   x86: true
+          #   build-type: "Release"
+
+          # - compiler: "msvc"
+          #   version: "14.34"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "msvc-14.3"
+          #   generator: "Visual Studio 17 2022"
+          #   is-latest: true
+          #   name: "MSVC 14.34: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "clang-cl"
+          #   version: "*"
+          #   cxx: "clang++-cl"
+          #   cc: "clang-cl"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "clang-win"
+          #   generator-toolset: "ClangCL"
+          #   is-latest: true
+          #   is-earliest: true
+          #   name: "Windows-Clang"
+          #   shared: false
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "mingw"
+          #   version: "*"
+          #   cxx: "g++"
+          #   cc: "gcc"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "gcc"
+          #   generator: "MinGW Makefiles"
+          #   is-latest: true
+          #   is-earliest: true
+          #   name: "MinGW"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "mingw"
+          #   version: "*"
+          #   cxx: "g++"
+          #   cc: "gcc"
+          #   runs-on: "windows-2022"
+          #   b2-toolset: "gcc"
+          #   generator: "MinGW Makefiles"
+          #   is-latest: true
+          #   is-earliest: true
+          #   name: "MinGW"
+          #   shared: false
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # OSX compilers
+          #
+
+          - compiler: "apple-clang"
+            version: "*"
+            cxxstd: "17,20"
+            cxx: "clang++"
+            cc: "clang"
+            runs-on: "macos-15"
+            b2-toolset: "clang"
+            is-latest: true
+            name: "Apple-Clang (macOS 15)"
+            shared: true
+            build-type: "Release"
+            build-cmake: true
+
+          # - compiler: "apple-clang"
+          #   version: "*"
+          #   cxx: "clang++"
+          #   cc: "clang"
+          #   runs-on: "macos-15"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Apple-Clang (macOS 15, ubsan)"
+          #   shared: false
+          #   build-type: "RelWithDebInfo"
+          #   ubsan: true
+
+          # - compiler: "apple-clang"
+          #   version: "*"
+          #   cxx: "clang++"
+          #   cc: "clang"
+          #   runs-on: "macos-15"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Apple-Clang (macOS 15, asan)"
+          #   shared: true
+          #   build-type: "RelWithDebInfo"
+          #   asan: true
+
+          # - compiler: "apple-clang"
+          #   version: "*"
+          #   cxxstd: "20"
+          #   cxx: "clang++"
+          #   cc: "clang"
+          #   runs-on: "macos-14"
+          #   b2-toolset: "clang"
+          #   name: "Apple-Clang (macOS 14)"
+          #   shared: false
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "apple-clang"
+          #   version: "*"
+          #   cxxstd: "14"
+          #   cxx: "clang++"
+          #   cc: "clang"
+          #   runs-on: "macos-13"
+          #   b2-toolset: "clang"
+          #   name: "Apple-Clang (macOS 13)"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # # Linux compilers
+          # #
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (no zlib)"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (x86)"
+          #   shared: false
+          #   x86: true
+          #   build-type: "Release"
+          #   install: "gcc-14-multilib g++-14-multilib"
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (x86)"
+          #   shared: false
+          #   x86: true
+          #   build-type: "Release"
+          #   install: "gcc-14-multilib g++-14-multilib"
+          #   build-cmake: true
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (asan)"
+          #   shared: true
+          #   asan: true
+          #   build-type: "RelWithDebInfo"
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (asan, x86)"
+          #   shared: false
+          #   asan: true
+          #   x86: true
+          #   build-type: "RelWithDebInfo"
+          #   install: "gcc-14-multilib g++-14-multilib"
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (ubsan)"
+          #   shared: true
+          #   ubsan: true
+          #   build-type: "RelWithDebInfo"
+
+          # - compiler: "gcc"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-14"
+          #   cc: "gcc-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 14: C++17-20 (ubsan, x86)"
+          #   shared: false
+          #   ubsan: true
+          #   x86: true
+          #   build-type: "RelWithDebInfo"
+          #   install: "gcc-14-multilib g++-14-multilib"
+
+          # - compiler: "gcc"
+          #   version: "13"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-13"
+          #   cc: "gcc-13"
+          #   runs-on: "ubuntu-24.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 13: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "13"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-13"
+          #   cc: "gcc-13"
+          #   runs-on: "ubuntu-24.04"
+          #   b2-toolset: "gcc"
+          #   is-latest: true
+          #   name: "GCC 13: C++17-20 (coverage)"
+          #   shared: false
+          #   coverage: true
+          #   build-type: "Debug"
+          #   cxxflags: "--coverage -fprofile-arcs -ftest-coverage"
+          #   ccflags: "--coverage -fprofile-arcs -ftest-coverage"
+          #   install: "lcov wget unzip"
+
+          # - compiler: "gcc"
+          #   version: "12"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-12"
+          #   cc: "gcc-12"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 12: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "11"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "g++-11"
+          #   cc: "gcc-11"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 11: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "10"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "g++-10"
+          #   cc: "gcc-10"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 10: C++14-17"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "9"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "g++-9"
+          #   cc: "gcc-9"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 9: C++14-17"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "8"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "g++-8"
+          #   cc: "gcc-8"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 8: C++14-17"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "7"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "g++-7"
+          #   cc: "gcc-7"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 7: C++14-17"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "6"
+          #   cxxstd: "11,14"
+          #   latest-cxxstd: "14"
+          #   cxx: "g++-6"
+          #   cc: "gcc-6"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:18.04"
+          #   b2-toolset: "gcc"
+          #   name: "GCC 6: C++11-14"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "gcc"
+          #   version: "5"
+          #   cxxstd: "11"
+          #   latest-cxxstd: "11"
+          #   cxx: "g++-5"
+          #   cc: "gcc-5"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:18.04"
+          #   b2-toolset: "gcc"
+          #   is-earliest: true
+          #   name: "GCC 5: C++11"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+          #   build-cmake: true
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20 (x86)"
+          #   shared: false
+          #   x86: true
+          #   build-type: "Release"
+          #   install: "gcc-multilib g++-multilib"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++20 (time-trace)"
+          #   shared: true
+          #   time-trace: true
+          #   build-type: "Release"
+          #   cxxflags: "-ftime-trace"
+          #   ccflags: "-ftime-trace"
+          #   install: " wget unzip"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20 (asan)"
+          #   shared: false
+          #   asan: true
+          #   build-type: "RelWithDebInfo"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20 (asan, x86)"
+          #   shared: true
+          #   asan: true
+          #   x86: true
+          #   build-type: "RelWithDebInfo"
+          #   install: "gcc-multilib g++-multilib"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20 (ubsan)"
+          #   shared: false
+          #   ubsan: true
+          #   build-type: "RelWithDebInfo"
+
+          # - compiler: "clang"
+          #   version: "18"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-18"
+          #   cc: "clang-18"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:24.04"
+          #   b2-toolset: "clang"
+          #   is-latest: true
+          #   name: "Clang 18: C++17-20 (ubsan, x86)"
+          #   shared: true
+          #   ubsan: true
+          #   x86: true
+          #   build-type: "RelWithDebInfo"
+          #   install: "gcc-multilib g++-multilib"
+
+          # - compiler: "clang"
+          #   version: "17"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-17"
+          #   cc: "clang-17"
+          #   runs-on: "ubuntu-24.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 17: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "16"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-16"
+          #   cc: "clang-16"
+          #   runs-on: "ubuntu-24.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 16: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "15"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-15"
+          #   cc: "clang-15"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 15: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "14"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-14"
+          #   cc: "clang-14"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 14: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "13"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-13"
+          #   cc: "clang-13"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 13: C++17-20"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "12"
+          #   cxxstd: "17,20"
+          #   latest-cxxstd: "20"
+          #   cxx: "clang++-12"
+          #   cc: "clang-12"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 12: C++17-20"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "11"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-11"
+          #   cc: "clang-11"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:22.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 11: C++14-17"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "10"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-10"
+          #   cc: "clang-10"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 10: C++14-17"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "9"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-9"
+          #   cc: "clang-9"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 9: C++14-17"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "8"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-8"
+          #   cc: "clang-8"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 8: C++14-17"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "7"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-7"
+          #   cc: "clang-7"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 7: C++14-17"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "6"
+          #   cxxstd: "14,17"
+          #   latest-cxxstd: "17"
+          #   cxx: "clang++-6.0"
+          #   cc: "clang-6.0"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:20.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 6: C++14-17"
+          #   shared: true
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "5"
+          #   cxxstd: "11,14"
+          #   latest-cxxstd: "14"
+          #   cxx: "clang++-5.0"
+          #   cc: "clang-5.0"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:18.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 5: C++11-14"
+          #   shared: false
+          #   build-type: "Release"
+
+          # - compiler: "clang"
+          #   version: "4"
+          #   cxxstd: "11,14"
+          #   latest-cxxstd: "14"
+          #   cxx: "clang++-4.0"
+          #   cc: "clang-4.0"
+          #   runs-on: "ubuntu-latest"
+          #   container: "ubuntu:18.04"
+          #   b2-toolset: "clang"
+          #   name: "Clang 4: C++11-14"
+          #   shared: true
+          #   build-type: "Release"
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ fromJSON(needs.runner-selection.outputs.labelmatrix)[matrix.runs-on] }}
+    container:
+      image: ${{ matrix.container }}
+      options: --privileged
+      volumes:
+        - /node20217:/node20217:rw,rshared
+        - ${{ startsWith(matrix.container, 'ubuntu:1') && '/node20217:/__e/node20:ro,rshared' || ' ' }}
+
+    timeout-minutes: 120
+
+    steps:
+      - name: install nodejs20glibc2.17
+        if: ${{ startsWith( matrix.container, 'ubuntu:1' ) }}
+        run: |
+          apt-get update
+          apt-get -yqq install xz-utils curl
+          curl -LO https://archives.boost.io/misc/node/node-v20.9.0-linux-x64-glibc-217.tar.xz
+          tar -xf node-v20.9.0-linux-x64-glibc-217.tar.xz --strip-components 1 -C /node20217
+          ldd /__e/node20/bin/node
+
+      - name: Clone Boost.SQLite
+        uses: actions/checkout@v4
+        with:
+          path: sqlite-root
+
+      - name: Setup C++
+        uses: alandefreitas/cpp-actions/setup-cpp@v1.8.8
+        id: setup-cpp
+        with:
+          compiler: ${{ matrix.compiler }}
+          version: ${{ matrix.version }}
+          check-latest: ${{ matrix.compiler != 'clang' || matrix.version != '^3.8' }}
+          trace-commands: true
+
+      - name: Install packages
+        uses: alandefreitas/cpp-actions/package-install@v1.8.8
+        id: package-install
+        with:
+          apt-get: >-
+            ${{ matrix.install }}
+            libsqlite3-dev sqlite3
+            build-essential
+
+      - name: Clone Boost
+        uses: alandefreitas/cpp-actions/boost-clone@v1.8.8
+        id: boost-clone
+        with:
+          branch: ${{ (github.ref_name == 'master' && github.ref_name) || 'develop' }}
+          boost-dir: boost-source
+          cache: false
+          modules-exclude-paths: ''
+          scan-modules-dir: sqlite-root
+          scan-modules-ignore: sqlite
+
+      - name: Patch Boost
+        id: patch
+        shell: bash
+        run: |
+          set -xe
+          pwd
+          ls
+          ls -lah boost-source
+
+          # Identify boost module being tested
+          module=${GITHUB_REPOSITORY#*/}
+          echo "module=$module" >> $GITHUB_OUTPUT
+
+          # Identify GitHub workspace root
+          workspace_root=$(echo "$GITHUB_WORKSPACE" | sed 's/\\/\//g')
+          echo -E "workspace_root=$workspace_root" >> $GITHUB_OUTPUT
+
+          # Remove module from boost-source
+          rm -r "boost-source/libs/$module" || true
+
+          # Copy cached boost-source to an isolated boost-root
+          cp -r boost-source boost-root
+
+          # Set boost-root output
+          cd boost-root
+          boost_root="$(pwd)"
+          boost_root=$(echo "$boost_root" | sed 's/\\/\//g')
+          echo -E "boost_root=$boost_root" >> $GITHUB_OUTPUT
+
+          # Patch boost-root with workspace module
+          cp -r "$workspace_root"/sqlite-root "libs/$module"
+
+          git submodule update --init tools/boostdep
+          python3 tools/boostdep/depinst/depinst.py --git_args "--jobs 3" $module
+          ./bootstrap.sh
+          ./b2 -d0 headers
+          ./b2 --with-json --with-url --with-test --with-json --with-container
+
+      # - name: Boost B2 Workflow
+      #   uses: alandefreitas/cpp-actions/b2-workflow@v1.8.8
+      #   if: ${{ !matrix.coverage && !matrix.time-trace }}
+      #   with:
+      #     source-dir: boost-root
+      #     modules: sqlite
+      #     toolset: ${{ matrix.b2-toolset }}
+      #     build-variant: ${{ matrix.build-type }}
+      #     cxx: ${{ steps.setup-cpp.outputs.cxx || matrix.cxx || '' }}
+      #     cxxstd: "17,20"
+      #     address-model: ${{ (matrix.x86 && '32') || '64' }}
+      #     asan: ${{ matrix.asan }}
+      #     ubsan: ${{ matrix.ubsan }}
+      #     shared: ${{ matrix.shared }}
+      #     rtti: on # TODO: ${{ (matrix.is-latest && 'on,off') || 'on' }}
+      #     cxxflags: ${{ (matrix.asan && '-fsanitize=pointer-subtract') || '' }}
+      #     stop-on-error: true
+
+      - name: Set Path
+        if: startsWith(matrix.runs-on, 'windows') && matrix.shared
+        run: echo "$GITHUB_WORKSPACE/.local/bin" >> $GITHUB_PATH
+
+      - name: Set LD_LIBRARY_PATH
+        if: startsWith(matrix.runs-on, 'ubuntu') && matrix.shared
+        run: |
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/.local/lib:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+
+      - name: Root Project CMake Workflow
+        uses: alandefreitas/cpp-actions/cmake-workflow@v1.8.8
+        if: ${{ matrix.build-cmake || matrix.is-earliest }}
+        with:
+          extra-args: "-DBOOST_ROOT=${{ steps.patch.outputs.boost_root }}"
+          source-dir: boost-root/libs/${{ steps.patch.outputs.module }}
+          build-dir: __build_root_test__
+          build-target: all
+          run-tests: true
+          generator: ${{ matrix.generator }}
+          generator-toolset: ${{ matrix.generator-toolset }}
+          build-type: ${{ matrix.build-type }}
+          install: false
+          cxxstd: "17"
+          cc: ${{ steps.setup-cpp.outputs.cc || matrix.cc }}
+          ccflags: ${{ matrix.ccflags }}
+          cxx: ${{ steps.setup-cpp.outputs.cxx || matrix.cxx }}
+          cxxflags: ${{ matrix.cxxflags }}
+          shared: ${{ matrix.shared }}
+          cmake-version: '>=3.20'
+          package: false
+          package-artifact: false
+          ref-source-dir: boost-root
+          toolchain: ${{ (startsWith(matrix.runs-on, 'windows') && steps.patch-user-config.outputs.toolchain) || '' }}
